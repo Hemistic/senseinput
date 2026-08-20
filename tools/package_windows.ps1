@@ -20,6 +20,13 @@ if (-not $SkipBuild) {
 }
 
 if (-not (Test-Path -LiteralPath $distDirectory)) { throw "Missing dist directory: $distDirectory" }
+foreach ($executableName in @('sensevoice-ui.exe', 'sensevoice-ui-legacy.exe', 'sensevoice-stream.exe')) {
+    $builtExecutable = Join-Path $binaryDirectory $executableName
+    if (-not (Test-Path -LiteralPath $builtExecutable)) {
+        throw "Missing built executable: $builtExecutable"
+    }
+    Copy-Item -LiteralPath $builtExecutable -Destination (Join-Path $distDirectory $executableName) -Force
+}
 Remove-Item -LiteralPath $packageDirectory -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
 Get-ChildItem -LiteralPath $distDirectory -Force |

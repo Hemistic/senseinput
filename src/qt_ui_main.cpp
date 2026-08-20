@@ -197,7 +197,7 @@ QString shortcutDisplayName(const QString& shortcut) {
 }
 
 QIcon sensevoiceIcon() {
-    static const QIcon icon(QStringLiteral(":/icons/sensevoice.svg"));
+    static const QIcon icon(QStringLiteral(":/icons/sensevoice.ico"));
     return icon;
 }
 
@@ -1335,7 +1335,9 @@ public:
           bubble_style_(bubble_style), preview_mode_(preview_mode) {
         setWindowTitle(QStringLiteral("SenseVoice 语音输入"));
         setWindowIcon(sensevoiceIcon());
-        setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool |
+        // Keep the overlay frameless and always-on-top, but use a normal top-level
+        // window so Windows creates a taskbar button with the application icon.
+        setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint |
                        Qt::WindowDoesNotAcceptFocus);
         setAttribute(Qt::WA_TranslucentBackground);
         setAttribute(Qt::WA_ShowWithoutActivating);

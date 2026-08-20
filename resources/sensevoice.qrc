@@ -1,5 +1,5 @@
 <RCC>
   <qresource prefix="/icons">
-    <file>sensevoice.svg</file>
+    <file>sensevoice.ico</file>
   </qresource>
 </RCC>
