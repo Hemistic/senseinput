@@ -157,7 +157,7 @@ src/                         C++20 recognition, VAD, audio and Qt UI
 resources/                   Qt resources, ICO and Windows version resources
 packaging/windows/            Inno Setup definition and portable scripts
 tools/                       Packaging, icon generation and geometry checks
-third_party/                 llama.cpp, FunASR runtime, cppjieba and OpenLess sources
+third_party/                 llama.cpp runtime core, FunASR, cppjieba and OpenLess sources
 tests/                       Recognition, text processing and Windows injection tests
 ~~~
 
