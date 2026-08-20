@@ -1573,7 +1573,7 @@ private:
         auto* root = new QVBoxLayout(this);
         root->setContentsMargins(window_margin, window_margin, window_margin, window_margin);
         root->setSpacing(control_spacing);
-        root->setAlignment(Qt::AlignLeft);
+        root->setAlignment(Qt::AlignHCenter);
 
         transcript_ = new TranscriptBubble(bubble_style_);
         setBubbleStatus(QStringLiteral("正在加载..."));
@@ -1581,8 +1581,8 @@ private:
         recording_control_ = new RecordingControl(bubble_style_);
         recording_control_->setEnabled(false);
         recording_control_->setMode(text_mode_);
-        root->addWidget(transcript_, 0, Qt::AlignLeft);
-        root->addWidget(recording_control_, 0, Qt::AlignLeft);
+        root->addWidget(transcript_, 0, Qt::AlignHCenter);
+        root->addWidget(recording_control_, 0, Qt::AlignHCenter);
 
         recording_control_->setHandlers(
             [this] {
