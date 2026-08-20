@@ -9,7 +9,7 @@
 
 SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合 FSMN-VAD 实现实时分句、临时结果更新和最终结果提交。麦克风音频和识别结果都留在本机，不依赖云端 API。
 
-## Highlights
+## 项目特点
 
 - **离线优先**：默认模型和所有处理都在本机运行。
 - **轻量模型**：SenseVoiceSmall Q8 约 242 MiB，适合桌面常驻。
@@ -20,19 +20,19 @@ SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合
 - **内存保护**：单句长度和工作集都有上限，长内容在最近的 VAD 边界自动分句。
 - **音频保护**：录音期间可暂时静音默认播放设备，结束后恢复原状态。
 
-## Quick Start
+## 快速开始
 
-### Installer
+### 安装程序
 
-从 Releases 下载 SenseVoice-Setup.exe，双击安装即可。安装程序会：
+从 Releases 下载 `SenseVoice-0.1.1-Setup.exe`，双击安装即可。安装程序会：
 
 - 安装到当前用户的 %LOCALAPPDATA%\\SenseVoice；
 - 创建开始菜单快捷方式；
 - 默认通过当前用户的 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 注册开机启动；
 - 不需要管理员权限；
-- 支持从“应用和功能”或开始菜单中的 `unins000.exe` 卸载，卸载时会停止程序并清理自启动注册和快捷方式。Portable ZIP 仍提供 `uninstall.ps1`。
+- 支持从“应用和功能”或开始菜单中的 `unins000.exe` 卸载，卸载时会停止程序并清理自启动注册和快捷方式。便携版 ZIP 仍提供 `uninstall.ps1`。
 
-### Portable ZIP
+### 便携版 ZIP
 
 解压 Windows ZIP 发布包，运行：
 
@@ -44,7 +44,7 @@ SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合
 
 默认快捷键可以在托盘菜单的“设置”中改为 Ctrl+Win、Ctrl+Shift+Space、F8 或自定义组合键；同一页面也可以关闭“开机自动启动”。
 
-## How It Works
+## 工作原理
 
 SenseVoiceSmall 不是原生流式模型，项目通过短句快照实现实时体验：
 
@@ -52,11 +52,11 @@ SenseVoiceSmall 不是原生流式模型，项目通过短句快照实现实时�
 麦克风 → 音频整形 → FSMN-VAD → 短句快照 → SenseVoiceSmall → partial/final
 ~~~
 
-partial 会持续更新当前预览，VAD 确认句尾后输出 final，已提交音频随即释放，下一句从新的短窗口开始。识别线程忙时只保留最新快照，不排队过时结果。
+临时结果会持续更新当前预览，VAD 确认句尾后输出最终结果，已提交音频随即释放，下一句从新的短窗口开始。识别线程忙时只保留最新快照，不排队过时结果。
 
-## Features
+## 功能
 
-### Text processing
+### 文本处理
 
 - 原文模式：保留模型输出；
 - 精简模式：删除常见口水词、统一中文标点、合并相邻重复句；
@@ -64,7 +64,7 @@ partial 会持续更新当前预览，VAD 确认句尾后输出 final，已提�
 - 词典：支持 dict\\user.dict.utf8 补充专有名词；
 - 纠正规则：支持确定性字面替换和单个 {num} 数字占位符。
 
-### Audio and memory controls
+### 音频与内存控制
 
 - 录音采集层只做衰减，不放大背景噪声；
 - 目标语音 RMS 约为 -20 dBFS，峰值保护线为 -4 dBFS；
@@ -72,42 +72,42 @@ partial 会持续更新当前预览，VAD 确认句尾后输出 final，已提�
 - 默认运行时内存保护线为 300 MiB；
 - 录音结束、取消、失败和程序退出都会恢复播放设备原来的静音状态。
 
-## Command Line
+## 命令行
 
-### Microphone
+### 麦克风输入
 
 ~~~powershell
 .\\sensevoice-stream.exe --model .\\models\\sensevoice-small-q8.gguf --vad .\\models\\fsmn-vad.gguf --mic
 ~~~
 
-### Audio file
+### 音频文件
 
 ~~~powershell
 .\\sensevoice-stream.exe --model .\\models\\sensevoice-small-q8.gguf --vad .\\models\\fsmn-vad.gguf --audio 'C:\\path\\to\\recording.m4a'
 ~~~
 
-Useful parameters:
+常用参数：
 
-| Parameter | Default | Purpose |
+| 参数 | 默认值 | 作用 |
 | --- | ---: | --- |
-| --partial-ms | 450 | Target interval between partial results |
-| --endpoint-silence-ms | 700 | Silence required to finalize a sentence |
-| --maximum-utterance-ms | 15000 | Maximum audio budget for one utterance |
-| --memory-limit-mb | 300 | Working-set protection line |
-| --vad-speech-threshold | profile | FSMN speech confidence threshold |
-| --vad-min-db | profile | Absolute minimum input level |
-| --vad-min-snr-db | profile | Minimum signal-to-noise margin |
-| --hotwords FILE | optional | UTF-8 tab-separated hotword file |
-| --corrections FILE | optional | Deterministic correction rules |
+| --partial-ms | 450 | 临时结果更新的目标间隔 |
+| --endpoint-silence-ms | 700 | 确认句子结束所需的静音时长 |
+| --maximum-utterance-ms | 15000 | 单句允许处理的最大音频时长 |
+| --memory-limit-mb | 300 | 工作集内存保护上限 |
+| --vad-speech-threshold | profile | FSMN 语音置信度门限 |
+| --vad-min-db | profile | 输入响度绝对下限 |
+| --vad-min-snr-db | profile | 最低信噪比余量 |
+| --hotwords FILE | 可选 | UTF-8 制表符分隔的热词文件 |
+| --corrections FILE | 可选 | 确定性的文本纠正规则 |
 
-## Build
+## 构建
 
-Requirements:
+环境要求：
 
-- Windows 10 or newer;
-- Visual Studio 2022 with Desktop C++ and CMake;
-- Qt 6.8 Widgets built for the same MSVC architecture;
-- Git submodules initialized.
+- Windows 10 或更高版本；
+- 安装带有“使用 C++ 的桌面开发”和 CMake 的 Visual Studio 2022；
+- 使用相同 MSVC 架构构建的 Qt 6.8 Widgets；
+- 已初始化 Git 子模块。
 
 ~~~powershell
 git submodule update --init --recursive
@@ -116,69 +116,69 @@ cmake --build build --config Release --target sensevoice-ui sensevoice-ui-legacy
 ctest --test-dir build -C Release --output-on-failure
 ~~~
 
-The default build uses the CPU backend. OpenMP is disabled to avoid an extra runtime dependency; the release path is optimized for AVX2/FMA/F16C CPUs.
+默认构建使用 CPU 后端。为避免额外的运行时依赖，项目关闭了 OpenMP；Release 构建针对支持 AVX2/FMA/F16C 的 CPU 做了优化。
 
-## Packaging
+## 打包
 
 ~~~powershell
-.\tools\package_windows.ps1 -Version 0.1.0
-.\tools\create_installer.ps1 -Version 0.1.0
+.\tools\package_windows.ps1 -Version 0.1.1
+.\tools\create_installer.ps1 -Version 0.1.1
 ~~~
 
-Outputs:
+输出文件：
 
 ~~~text
-out\\SenseVoice-0.1.0-windows-x64.zip
-out\\SenseVoice-0.1.0-Setup.exe
+out\\SenseVoice-0.1.1-windows-x64.zip
+out\\SenseVoice-0.1.1-Setup.exe
 ~~~
 
-The installer is a standard Inno Setup wizard with welcome, destination, Start Menu, startup-task, progress, and finish pages. It installs per-user without administrator rights, registers an Apps & Features uninstall entry, and creates a native `unins000.exe` uninstaller. The portable ZIP keeps the PowerShell install/uninstall scripts separately.
+安装程序是标准的 Inno Setup 向导，包含欢迎、安装位置、开始菜单、开机启动、进度和完成页面。它以当前用户权限安装，不需要管理员权限，会在“应用和功能”中注册卸载项，并创建原生的 `unins000.exe` 卸载程序。便携版 ZIP 会单独保留 PowerShell 安装和卸载脚本。
 
-To build the standard installer, install Inno Setup 6/7 so `ISCC.exe` is available, set `INNO_SETUP_HOME`, or pass `-CompilerPath` to `create_installer.ps1`.
+要构建标准安装程序，请安装 Inno Setup 6/7 并确保可以找到 `ISCC.exe`，设置 `INNO_SETUP_HOME`，或向 `create_installer.ps1` 传入 `-CompilerPath`。
 
-## Performance Snapshot
+## 性能参考
 
-Measured on a 20-logical-core AVX2 Windows machine with the Q8 model:
+以下数据是在一台拥有 20 个逻辑核心、支持 AVX2 的 Windows 设备上使用 Q8 模型测得的：
 
-- model files: about 244 MiB;
-- model load: about 80-140 ms;
-- first non-empty partial: about 700 ms after speech starts;
-- final VAD: about 30-40 ms;
-- final SenseVoice inference: about 370-400 ms;
-- real-time replay: about 13% total CPU;
-- peak working set: about 289 MiB in the current lightweight text-processing profile.
+- 模型文件：约 244 MiB；
+- 模型加载：约 80-140 ms；
+- 首个非空临时结果：开始说话后约 700 ms；
+- VAD 最终确认：约 30-40 ms；
+- SenseVoice 最终推理：约 370-400 ms；
+- 实时回放：总 CPU 占用约 13%；
+- 峰值工作集：当前轻量文本处理配置下约 289 MiB。
 
-These numbers are hardware-dependent engineering references, not benchmark claims.
+以上数据与硬件有关，仅作为工程参考，不构成统一基准测试结论。
 
-## Project Layout
+## 项目结构
 
 ~~~text
-src/                         C++20 recognition, VAD, audio and Qt UI
-resources/                   Qt resources, ICO and Windows version resources
-packaging/windows/            Inno Setup definition and portable scripts
-tools/                       Packaging, icon generation and geometry checks
-third_party/                 llama.cpp runtime core, FunASR, cppjieba and OpenLess sources
-tests/                       Recognition, text processing and Windows injection tests
+src/                         C++20 识别、VAD、音频和 Qt 界面
+resources/                   Qt 资源、ICO 图标和 Windows 版本资源
+packaging/windows/           Inno Setup 定义和便携版脚本
+tools/                       打包、图标生成和几何检查工具
+third_party/                 llama.cpp 运行时核心、FunASR、cppjieba 和 OpenLess 源码
+tests/                       识别、文本处理和 Windows 注入测试
 ~~~
 
-## Model and Third-Party Credits
+## 模型与第三方致谢
 
-The default model is SenseVoiceSmall Q8 GGUF from FunAudioLLM. The runtime is built on llama.cpp and FunASR components; text segmentation uses cppjieba-compatible dictionaries. Check upstream repositories and model distribution terms before redistributing modified binaries or models.
+默认模型是 FunAudioLLM 发布的 SenseVoiceSmall Q8 GGUF。运行时基于 llama.cpp 和 FunASR 组件构建，文本分词使用兼容 cppjieba 的词典。重新分发修改后的二进制文件或模型前，请查阅各上游仓库和模型的分发条款。
 
-## Roadmap
+## 开发路线
 
-- [x] Offline SenseVoiceSmall Q8 inference
-- [x] FSMN-VAD endpointing and configurable thresholds
-- [x] Hotword management and local text cleanup
-- [x] Windows TSF/UI Automation injection
-- [x] Qt floating UI and standard Inno Setup installer
-- [ ] macOS audio capture and text insertion
-- [ ] Optional FP16 performance profile for supported hardware
+- [x] 离线 SenseVoiceSmall Q8 推理
+- [x] FSMN-VAD 断句和可调门限
+- [x] 热词管理和本地文本整理
+- [x] Windows TSF/UI Automation 注入
+- [x] Qt 浮窗界面和标准 Inno Setup 安装程序
+- [ ] macOS 音频采集和文本注入
+- [ ] 针对支持硬件的可选 FP16 性能配置
 
-## Contributing
+## 参与贡献
 
-Issues and pull requests are welcome. Please include the Windows version, CPU architecture, model quantization, audio characteristics, and relevant logs when reporting recognition or injection problems. Do not attach private recordings or credentials.
+欢迎提交 Issue 和 Pull Request。报告识别或注入问题时，请附上 Windows 版本、CPU 架构、模型量化类型、音频特征和相关日志。请勿上传私人录音或凭据。
 
-## License
+## 许可证
 
-This repository currently does not declare a top-level license. Review the licenses of this project, the bundled third-party sources, and the SenseVoice model before publishing derivative binaries.
+本仓库目前没有声明顶层许可证。发布衍生二进制文件前，请分别确认本项目、捆绑的第三方源码和 SenseVoice 模型的许可证要求。
