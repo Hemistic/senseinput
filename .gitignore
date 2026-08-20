@@ -1,0 +1,10 @@
+/build/
+/out/
+/dist/
+/*.png
+/out-replay-*.jsonl
+*.log
+__pycache__/
+/third_party/llama.cpp.zip
+/third_party/llama.cpp-extracted/
+/third_party/llama.cpp-incomplete-*/

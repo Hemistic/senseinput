@@ -1,0 +1,9 @@
+[submodule "third_party/FunASR"]
+	path = third_party/FunASR
+	url = https://github.com/modelscope/FunASR.git
+[submodule "third_party/cppjieba"]
+	path = third_party/cppjieba
+	url = https://github.com/yanyiwu/cppjieba.git
+[submodule "third_party/openless"]
+	path = third_party/openless
+	url = https://github.com/Open-Less/openless.git
