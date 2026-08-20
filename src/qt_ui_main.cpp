@@ -1418,10 +1418,14 @@ public:
           bubble_style_(bubble_style), preview_mode_(preview_mode) {
         setWindowTitle(QStringLiteral("SenseVoice 语音输入"));
         setWindowIcon(sensevoiceIcon());
-        // Keep the overlay frameless and always-on-top, but use a normal top-level
-        // window so Windows creates a taskbar button with the application icon.
-        setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint |
-                       Qt::WindowDoesNotAcceptFocus);
+        // The live overlay is a tool window: it stays above the target app but
+        // never creates a taskbar button. Preview mode remains a normal window
+        // so screenshots and manual layout inspection can still find it.
+        Qt::WindowFlags window_flags =
+            Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint |
+            Qt::WindowDoesNotAcceptFocus;
+        if (!preview_mode_) window_flags |= Qt::Tool;
+        setWindowFlags(window_flags);
         setAttribute(Qt::WA_TranslucentBackground);
         setAttribute(Qt::WA_ShowWithoutActivating);
         if (preview_mode_) {
@@ -2045,7 +2049,16 @@ private:
     static bool usableInjectionTarget(const WindowsTextInputTarget& target) {
         if (!target.valid()) return false;
         const HWND window = reinterpret_cast<HWND>(target.window);
-        return window != nullptr && IsWindow(window) != FALSE;
+        if (window == nullptr || IsWindow(window) == FALSE ||
+            GetAncestor(window, GA_ROOT) != window) {
+            return false;
+        }
+        DWORD process_id = 0;
+        if (GetWindowThreadProcessId(window, &process_id) == 0 ||
+            process_id == GetCurrentProcessId()) {
+            return false;
+        }
+        return target.process_id == 0 || target.process_id == process_id;
     }
 
     void selectInjectionTarget() {
@@ -2110,11 +2123,17 @@ private:
 
     bool injectIntoTarget(WindowsTextInputTarget target, const QString& text) {
         if (!usableInjectionTarget(target) || text.trimmed().isEmpty()) return false;
-        const std::wstring wide_text = text.toStdWString();
-        return inject_text_into_windows_text_input(
-            std::move(target),
-            wide_text,
-            GetCurrentProcessId());
+        try {
+            const std::wstring wide_text = text.toStdWString();
+            return inject_text_into_windows_text_input(
+                std::move(target),
+                wide_text,
+                GetCurrentProcessId());
+        } catch (...) {
+            // A dead target or a failing COM provider must degrade to the
+            // clipboard fallback instead of terminating the voice input UI.
+            return false;
+        }
     }
 #endif
 
@@ -2153,6 +2172,7 @@ private:
     void startSession(bool via_hotkey) {
         if (state_ != State::Ready) return;
         if (stopper_.joinable()) stopper_.join();
+        ++session_generation_;
         status_reset_timer_.stop();
         committed_text_.clear();
         partial_text_.clear();
@@ -2256,6 +2276,7 @@ private:
         microphone_.reset();
         recognizer_.reset();
         partial_text_.clear();
+        const std::uint64_t session_id = session_generation_;
 
         QString final_text = committed_text_.trimmed();
         if (!commit) {
@@ -2303,7 +2324,11 @@ private:
             const bool should_inject = inject_on_complete_ && usableInjectionTarget(target);
             inject_on_complete_ = false;
             hidePopup();
-            QTimer::singleShot(160, this, [this, target = std::move(target), text_to_inject, should_inject] {
+            QTimer::singleShot(160, this, [this, session_id, target = std::move(target), text_to_inject, should_inject] {
+                if (shutting_down_.load(std::memory_order_acquire) ||
+                    session_id != session_generation_ || recording_control_ == nullptr) {
+                    return;
+                }
                 if (!should_inject) {
                     recording_control_->setToolTip(QStringLiteral("没有输入目标，已复制到剪贴板"));
                     return;
@@ -2313,13 +2338,19 @@ private:
                     last_target_ = {
                         .window = target.window,
                         .focus = target.focus,
+                        .process_id = target.process_id,
+                        .thread_id = target.thread_id,
                     };
                     recording_control_->setToolTip(QStringLiteral("已输入到光标位置"));
                 } else {
                     recording_control_->setToolTip(QStringLiteral("已复制到剪贴板"));
-                    showPopup();
-                    setBubbleStatus(QStringLiteral("注入失败，已复制到剪贴板"));
-                    QTimer::singleShot(900, this, [this] { hidePopup(); });
+                    if (state_ == State::Ready) {
+                        showPopup();
+                        setBubbleStatus(QStringLiteral("注入失败，已复制到剪贴板"));
+                        QTimer::singleShot(900, this, [this] {
+                            if (!shutting_down_.load(std::memory_order_acquire)) hidePopup();
+                        });
+                    }
                 }
             });
 #else
@@ -2546,6 +2577,7 @@ private:
     bool geometry_anchor_valid_ = false;
     bool stop_should_commit_ = false;
     bool inject_on_complete_ = false;
+    std::uint64_t session_generation_ = 0;
     QFile geometry_log_;
 };
 

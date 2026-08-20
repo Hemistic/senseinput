@@ -696,10 +696,27 @@ int wmain(int argument_count, wchar_t* arguments[]) {
         0);
     wchar_t actual[64]{};
     GetWindowTextW(edit, actual, static_cast<int>(std::size(actual)));
-    DestroyWindow(parent);
-
     if (!first_injection || !second_injection || std::wstring(actual) != tsf_expected) {
         std::cerr << "saved native edit target did not accept consecutive text\n";
+        DestroyWindow(parent);
+        return 1;
+    }
+
+    const WindowsTextInputTarget mismatched_process_target{
+        .window = reinterpret_cast<std::uintptr_t>(parent),
+        .focus = reinterpret_cast<std::uintptr_t>(edit),
+        .process_id = GetCurrentProcessId() + 1,
+    };
+    if (inject_text_into_windows_text_input(
+            mismatched_process_target, L"stale-process", 0)) {
+        std::cerr << "target with a mismatched process identity was accepted\n";
+        DestroyWindow(parent);
+        return 1;
+    }
+
+    DestroyWindow(parent);
+    if (inject_text_into_windows_text_input(saved_target, L"destroyed-target", 0)) {
+        std::cerr << "destroyed target was unexpectedly accepted\n";
         return 1;
     }
     return 0;

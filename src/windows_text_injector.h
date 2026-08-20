@@ -10,6 +10,8 @@ struct WindowsTextInputTarget {
     std::uintptr_t window = 0;
     std::uintptr_t focus = 0;
     std::shared_ptr<WindowsTextInputTargetState> state;
+    std::uint32_t process_id = 0;
+    std::uint32_t thread_id = 0;
 
     [[nodiscard]] bool valid() const {
         return window != 0;

@@ -335,6 +335,27 @@ UniqueHandle open_ime_pipe(DWORD process_id, DWORD thread_id) {
     return UniqueHandle();
 }
 
+class ScopedThreadInputAttachment final {
+public:
+    ScopedThreadInputAttachment(DWORD current_thread_id, DWORD target_thread_id)
+        : current_thread_id_(current_thread_id), target_thread_id_(target_thread_id) {
+        attached_ = target_thread_id_ != current_thread_id_ &&
+            AttachThreadInput(current_thread_id_, target_thread_id_, TRUE) != FALSE;
+    }
+
+    ScopedThreadInputAttachment(const ScopedThreadInputAttachment&) = delete;
+    ScopedThreadInputAttachment& operator=(const ScopedThreadInputAttachment&) = delete;
+
+    ~ScopedThreadInputAttachment() {
+        if (attached_) AttachThreadInput(current_thread_id_, target_thread_id_, FALSE);
+    }
+
+private:
+    DWORD current_thread_id_ = 0;
+    DWORD target_thread_id_ = 0;
+    bool attached_ = false;
+};
+
 enum class TsfSubmitResult {
     Unavailable,
     Committed,
@@ -421,6 +442,7 @@ bool bstr_to_wstring(BSTR value, std::wstring& output) {
 }
 
 bool range_text(IUIAutomationTextRange* range, std::wstring& output) {
+    if (range == nullptr) return false;
     BSTR value = nullptr;
     const HRESULT result = range->GetText(-1, &value);
     if (FAILED(result)) return false;
@@ -454,6 +476,7 @@ bool inject_with_uia(IUIAutomationElement* element, DWORD process_id, std::wstri
             reinterpret_cast<void**>(text_pattern.ReleaseAndGetAddressOf())))) {
         return false;
     }
+    if (value_pattern == nullptr || text_pattern == nullptr) return false;
 
     BOOL read_only = TRUE;
     if (FAILED(value_pattern->get_CurrentIsReadOnly(&read_only)) || read_only != FALSE) {
@@ -466,6 +489,7 @@ bool inject_with_uia(IUIAutomationElement* element, DWORD process_id, std::wstri
         FAILED(text_pattern->get_DocumentRange(document.ReleaseAndGetAddressOf()))) {
         return false;
     }
+    if (selections == nullptr || document == nullptr) return false;
     int selection_count = 0;
     if (FAILED(selections->get_Length(&selection_count)) || selection_count != 1) return false;
 
@@ -485,6 +509,7 @@ bool inject_with_uia(IUIAutomationElement* element, DWORD process_id, std::wstri
             TextPatternRangeEndpoint_End))) {
         return false;
     }
+    if (selection == nullptr || prefix_range == nullptr || suffix_range == nullptr) return false;
 
     std::wstring prefix;
     std::wstring suffix;
@@ -515,8 +540,11 @@ bool inject_with_uia(IUIAutomationElement* element, DWORD process_id, std::wstri
             UIA_TextPatternId,
             __uuidof(IUIAutomationTextPattern),
             reinterpret_cast<void**>(updated_pattern.ReleaseAndGetAddressOf()))) &&
+        updated_pattern != nullptr &&
         SUCCEEDED(updated_pattern->get_DocumentRange(updated_document.ReleaseAndGetAddressOf())) &&
+        updated_document != nullptr &&
         SUCCEEDED(updated_document->Clone(caret.ReleaseAndGetAddressOf())) &&
+        caret != nullptr &&
         SUCCEEDED(caret->MoveEndpointByRange(
             TextPatternRangeEndpoint_End,
             updated_document.Get(),
@@ -573,22 +601,31 @@ WindowsTextInputTarget capture_windows_text_input_target(std::uint32_t excluded_
     HWND window = GetForegroundWindow();
     if (window == nullptr) return {};
 
-    DWORD process_id = 0;
-    const DWORD thread_id = GetWindowThreadProcessId(window, &process_id);
-    if (process_id == excluded_process_id) return {};
-
     window = GetAncestor(window, GA_ROOT);
     if (window == nullptr || IsWindow(window) == FALSE) return {};
+    DWORD process_id = 0;
+    const DWORD thread_id = GetWindowThreadProcessId(window, &process_id);
+    if (thread_id == 0 || process_id == excluded_process_id) return {};
 
     GUITHREADINFO gui_info{sizeof(gui_info)};
     HWND focus = nullptr;
     if (thread_id != 0 && GetGUIThreadInfo(thread_id, &gui_info) != FALSE) {
         focus = gui_info.hwndFocus;
     }
+    std::shared_ptr<WindowsTextInputTargetState> state;
+    try {
+        state = prepare_tsf_session();
+    } catch (...) {
+        // Target capture must remain a best-effort operation. If TSF setup
+        // cannot allocate or initialize, the native/UIA fallbacks can still
+        // use the saved window and focus handles.
+    }
     return {
         .window = reinterpret_cast<std::uintptr_t>(window),
         .focus = reinterpret_cast<std::uintptr_t>(focus),
-        .state = prepare_tsf_session(),
+        .state = std::move(state),
+        .process_id = process_id,
+        .thread_id = thread_id,
     };
 }
 
@@ -600,56 +637,69 @@ bool inject_text_into_windows_text_input(
     WindowsTextInputTarget target_value,
     std::wstring_view text,
     std::uint32_t excluded_process_id) {
-    if (text.empty()) return false;
-    HWND target = reinterpret_cast<HWND>(target_value.window);
-    if (target == nullptr || IsWindow(target) == FALSE) return false;
-    target = GetAncestor(target, GA_ROOT);
-    if (target == nullptr || IsWindow(target) == FALSE) return false;
+    try {
+        if (text.empty()) return false;
+        HWND target = reinterpret_cast<HWND>(target_value.window);
+        if (target == nullptr || IsWindow(target) == FALSE) return false;
+        target = GetAncestor(target, GA_ROOT);
+        if (target == nullptr || IsWindow(target) == FALSE) return false;
 
-    DWORD process_id = 0;
-    DWORD target_thread_id = GetWindowThreadProcessId(target, &process_id);
-    if (process_id == excluded_process_id || target_thread_id == 0) return false;
+        DWORD process_id = 0;
+        DWORD target_thread_id = GetWindowThreadProcessId(target, &process_id);
+        if (process_id == excluded_process_id || target_thread_id == 0) return false;
+        if (target_value.process_id != 0 && target_value.process_id != process_id) return false;
+        if (target_value.thread_id != 0 && target_value.thread_id != target_thread_id) {
+            // The captured root window must stay on the same GUI thread. A
+            // changed thread means the HWND was replaced/reparented; treating
+            // that stale target as valid could redirect text or touch a dead
+            // focus handle while the user is switching applications.
+            return false;
+        }
 
-    HWND focus = reinterpret_cast<HWND>(target_value.focus);
-    DWORD focus_process_id = 0;
-    const DWORD focus_thread_id = focus != nullptr && IsWindow(focus) != FALSE
-        ? GetWindowThreadProcessId(focus, &focus_process_id)
-        : 0;
-    if (focus_thread_id != 0 && focus_process_id == process_id) {
-        target_thread_id = focus_thread_id;
-    } else {
-        focus = nullptr;
-    }
+        HWND focus = reinterpret_cast<HWND>(target_value.focus);
+        DWORD focus_process_id = 0;
+        const DWORD focus_thread_id = focus != nullptr && IsWindow(focus) != FALSE
+            ? GetWindowThreadProcessId(focus, &focus_process_id)
+            : 0;
+        if (focus_thread_id != 0 && focus_process_id == process_id) {
+            target_thread_id = focus_thread_id;
+        } else {
+            focus = nullptr;
+        }
 
-    const TsfSubmitResult tsf_result = submit_through_tsf(
-        target_value,
-        process_id,
-        target_thread_id,
-        text);
-    if (target_value.state) target_value.state->restore();
-    if (tsf_result == TsfSubmitResult::Committed) return true;
-    if (tsf_result == TsfSubmitResult::Indeterminate) return false;
+        const TsfSubmitResult tsf_result = submit_through_tsf(
+            target_value,
+            process_id,
+            target_thread_id,
+            text);
+        if (target_value.state) target_value.state->restore();
+        if (tsf_result == TsfSubmitResult::Committed) return true;
+        if (tsf_result == TsfSubmitResult::Indeterminate) return false;
 
-    if (focus != nullptr && inject_native_edit(focus, text)) return true;
+        if (focus != nullptr && inject_native_edit(focus, text)) return true;
 
-    if (IsIconic(target) != FALSE) ShowWindow(target, SW_RESTORE);
-    const DWORD current_thread_id = GetCurrentThreadId();
-    const bool attached = target_thread_id != current_thread_id &&
-        AttachThreadInput(current_thread_id, target_thread_id, TRUE) != FALSE;
+        if (IsIconic(target) != FALSE) ShowWindow(target, SW_RESTORE);
+        const DWORD current_thread_id = GetCurrentThreadId();
+        ScopedThreadInputAttachment thread_input(current_thread_id, target_thread_id);
 
-    BringWindowToTop(target);
-    SetActiveWindow(target);
-    SetForegroundWindow(target);
-    for (int attempt = 0; attempt < 3 && GetForegroundWindow() != target; ++attempt) {
+        BringWindowToTop(target);
+        SetActiveWindow(target);
         SetForegroundWindow(target);
-        std::this_thread::sleep_for(std::chrono::milliseconds(15));
-    }
+        for (int attempt = 0; attempt < 3 && GetForegroundWindow() != target; ++attempt) {
+            SetForegroundWindow(target);
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
 
-    bool injected = false;
-    if (GetForegroundWindow() == target) {
-        if (focus != nullptr) SetFocus(focus);
-        injected = inject_accessible_control(focus, process_id, text);
+        bool injected = false;
+        if (GetForegroundWindow() == target) {
+            if (focus != nullptr) SetFocus(focus);
+            injected = inject_accessible_control(focus, process_id, text);
+        }
+        return injected;
+    } catch (...) {
+        // Injection is a best-effort operation. A provider can disappear
+        // while focus is moving; never let an allocation/COM exception take
+        // down the voice input process.
+        return false;
     }
-    if (attached) AttachThreadInput(current_thread_id, target_thread_id, FALSE);
-    return injected;
 }
