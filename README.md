@@ -160,5 +160,16 @@ Core、GUI、Widgets 和 `qwindows` 平台插件，不包含 QML、WebEngine 或
 高 DPI 任务栏；卸载可以从“应用和功能”进入，也可以直接运行安装目录里的
 `uninstall.ps1`。
 
+如果需要单文件安装包，运行：
+
+```powershell
+.\tools\create_installer.ps1 -Version 0.1.0
+```
+
+这会生成 `out\SenseVoice-0.1.0-Setup.exe`。它是项目自带的单文件自解压安装包，ZIP
+发布内容直接附加在安装器后面，启动后自动执行同一份用户级安装脚本，因此仍然会注册
+开机启动，不需要管理员权限。安装器支持 `/quiet` 和 `/silent` 参数，用于自动化部署时
+隐藏完成提示。
+
 Git 初始提交不包含 `build`、`dist`、`out`、截图和模型发布目录；第三方源代码保留在
 `third_party` 以保证本地构建可复现，临时的 llama.cpp 压缩包和不完整快照会被忽略。

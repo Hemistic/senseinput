@@ -23,6 +23,7 @@ if (-not (Test-Path -LiteralPath $distDirectory)) { throw "Missing dist director
 Remove-Item -LiteralPath $packageDirectory -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
 Get-ChildItem -LiteralPath $distDirectory -Force |
+    Where-Object { $_.Name -notmatch '\.png$' -and $_.Name -notin @('使用说明.txt', 'preview-ui.exe') } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $packageDirectory -Recurse -Force }
 Copy-Item -LiteralPath (Join-Path $binaryDirectory 'sensevoice-ui.exe') -Destination $packageDirectory -Force
 Copy-Item -LiteralPath (Join-Path $binaryDirectory 'sensevoice-ui-legacy.exe') -Destination $packageDirectory -Force
