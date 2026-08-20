@@ -28,6 +28,7 @@ add_library(sensevoice_core STATIC
     src/sensevoice_engine.cpp
     src/stability_tracker.cpp
     src/stream_recognizer.cpp
+    src/system_audio_mute.cpp
     src/text_processor.cpp
 )
 target_include_directories(sensevoice_core PUBLIC src)
@@ -132,6 +133,21 @@ if(WIN32)
     target_compile_options(windows-text-target PRIVATE /utf-8 /W4 /permissive-)
     target_link_libraries(windows-text-target PRIVATE Qt6::Widgets)
     add_dependencies(windows-text-injector-test windows-text-target)
+
+    add_executable(sensevoice-inject
+        src/inject_main.cpp
+        src/windows_text_injector.cpp
+    )
+    target_include_directories(sensevoice-inject PRIVATE src)
+    target_compile_definitions(sensevoice-inject PRIVATE NOMINMAX UNICODE _UNICODE)
+    target_compile_options(sensevoice-inject PRIVATE /utf-8 /W4 /permissive-)
+    target_link_libraries(sensevoice-inject PRIVATE
+        ole32
+        oleaut32
+        shell32
+        uiautomationcore
+        uuid
+    )
 
     add_executable(sensevoice-ui-legacy WIN32
         src/audio_io.cpp

@@ -2,6 +2,7 @@
 #include "fsmn_vad_engine.h"
 #include "sensevoice_engine.h"
 #include "stream_recognizer.h"
+#include "system_audio_mute.h"
 #include "text_processor.h"
 #include "windows_text_injector.h"
 
@@ -799,6 +800,16 @@ public:
         setBubbleText(text_);
     }
 
+    [[nodiscard]] int cornerRadius() const {
+        if (style_ == BubbleStyle::Ring) {
+            return static_cast<int>(std::max(1.0, std::min(15.0, height() / 2.0 - 1.0)));
+        }
+        if (style_ == BubbleStyle::Capsule) {
+            return static_cast<int>(std::max(1.0, std::min(20.0, height() / 2.0 - 1.0)));
+        }
+        return std::min(10, std::min(width(), height()) / 2);
+    }
+
     void setBubbleText(const QString& text) {
         text_ = text;
         document_.setDefaultFont(base_font_);
@@ -873,7 +884,7 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing);
         const Metrics metrics = metricsFor(style_);
         const QRectF bubble_rect = QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0);
-        qreal radius = 12.0;
+        qreal radius = 10.0;
         QColor border;
         QColor background;
         QColor text_color;
@@ -881,17 +892,17 @@ protected:
             border = QColor(61, 96, 101);
             background = QColor(27, 45, 51);
             text_color = QColor(235, 250, 246);
-            radius = std::min(28.0, height() / 2.0 - 1.0);
+            radius = std::min(20.0, height() / 2.0 - 1.0);
         } else if (style_ == BubbleStyle::Ring) {
             border = QColor(235, 236, 240, 78);
             background = QColor(78, 80, 86, 72);
             text_color = QColor(242, 242, 247);
-            radius = std::max(1.0, std::min(width(), height()) / 2.0 - 1.0);
+            radius = std::max(1.0, std::min(15.0, height() / 2.0 - 1.0));
         } else {
             border = QColor(214, 220, 225);
             background = QColor(251, 252, 253);
             text_color = QColor(31, 37, 43);
-            radius = 11.0;
+            radius = 10.0;
         }
         painter.setPen(QPen(border, 1.0));
         painter.setBrush(background);
@@ -1418,6 +1429,7 @@ public:
             microphone_->stop();
             recognizer_->cancel();
         }
+        playback_mute_.restore();
         microphone_.reset();
         recognizer_.reset();
         if (loader_.joinable()) loader_.join();
@@ -1774,7 +1786,7 @@ private:
         if (transcript_ == nullptr || recording_control_ == nullptr) return;
         if (layout() != nullptr) layout()->activate();
         QRegion glass_region = roundedRegion(
-            transcript_->geometry(), std::min(transcript_->width(), transcript_->height()) / 2);
+            transcript_->geometry(), transcript_->cornerRadius());
         glass_region += roundedRegion(
             recording_control_->geometry(), recording_control_->height() / 2);
         setMask(glass_region);
@@ -2114,6 +2126,11 @@ private:
                 QMetaObject::invokeMethod(this, [this, event] { handleRecognition(event); }, Qt::QueuedConnection);
             },
             &text_processor_);
+        std::string playback_mute_error;
+        if (!playback_mute_.mute(playback_mute_error)) {
+            recording_control_->setToolTip(QStringLiteral("无法暂时静音系统播放：%1")
+                                               .arg(to_qstring(playback_mute_error)));
+        }
         microphone_ = std::make_unique<MicrophoneCapture>();
         recognizer_->start();
 
@@ -2125,6 +2142,7 @@ private:
                 error)) {
             recognizer_->cancel();
             recognizer_.reset();
+            playback_mute_.restore();
             microphone_.reset();
             state_ = State::Ready;
             recording_control_->setListening(false);
@@ -2170,6 +2188,7 @@ private:
 
     void stopWorkerFinished(bool commit) {
         if (stopper_.joinable()) stopper_.join();
+        playback_mute_.restore();
         QTimer::singleShot(0, this, [this, commit] { sessionStopped(commit); });
     }
 
@@ -2417,6 +2436,7 @@ private:
     SenseVoiceEngine engine_;
     FsmnVadEngine vad_;
     TextProcessor text_processor_;
+    SystemAudioMute playback_mute_;
     std::unique_ptr<StreamRecognizer> recognizer_;
     std::unique_ptr<MicrophoneCapture> microphone_;
     std::thread loader_;

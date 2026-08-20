@@ -12,9 +12,12 @@ $startMenuDirectory = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Progr
 $startupShortcut = Join-Path $startupDirectory 'SenseVoice.lnk'
 $startMenuShortcut = Join-Path $startMenuDirectory 'SenseVoice.lnk'
 
+# The single-file bootstrap uses this name for its temporary archive; never leave it installed.
+Remove-Item -LiteralPath (Join-Path $InstallDirectory 'payload.zip') -Force -ErrorAction SilentlyContinue
+
 New-Item -ItemType Directory -Force -Path $InstallDirectory | Out-Null
 Get-ChildItem -LiteralPath $packageRoot -Force |
-    Where-Object { $_.Name -notin @('install.ps1', 'install.cmd') } |
+    Where-Object { $_.Name -notin @('install.ps1', 'install.cmd', 'payload.zip') } |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $InstallDirectory -Recurse -Force }
 
 function New-SenseVoiceShortcut([string]$path) {

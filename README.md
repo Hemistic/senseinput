@@ -146,6 +146,9 @@ Core、GUI、Widgets 和 `qwindows` 平台插件，不包含 QML、WebEngine 或
 
 ## Windows 打包与安装
 
+录音开始时，Windows 默认播放设备会被暂时静音；停止、取消、录音失败或程序退出时会
+恢复录音前的静音状态。原本已经静音的播放设备不会被错误地打开。
+
 使用下面的命令生成便携 ZIP。构建目录中的 Release 程序会覆盖 `dist` 中对应的三个
 可执行文件，模型和 Qt 运行库继续从 `dist` 复制到发布目录：
 
@@ -170,6 +173,11 @@ Core、GUI、Widgets 和 `qwindows` 平台插件，不包含 QML、WebEngine 或
 发布内容直接附加在安装器后面，启动后自动执行同一份用户级安装脚本，因此仍然会注册
 开机启动，不需要管理员权限。安装器支持 `/quiet` 和 `/silent` 参数，用于自动化部署时
 隐藏完成提示。
+
+安装包同时包含 `sensevoice-inject.exe`，用于把最终文本通过 OpenLess TSF 或 UI
+Automation 注入当前获得焦点的 Windows 文本框。Codex 侧的 `sensevoice-codex-voice`
+插件提供同名的 `inject_text` MCP 工具，已加入当前用户的 personal marketplace；保持
+Codex composer 聚焦后即可让插件把最终文本送入光标位置，不使用剪贴板粘贴。
 
 Git 初始提交不包含 `build`、`dist`、`out`、截图和模型发布目录；第三方源代码保留在
 `third_party` 以保证本地构建可复现，临时的 llama.cpp 压缩包和不完整快照会被忽略。
