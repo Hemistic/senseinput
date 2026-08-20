@@ -5,7 +5,9 @@
 #include <shellapi.h>
 
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <string_view>
 
 namespace {
 
@@ -23,10 +25,30 @@ std::wstring commandLineText() {
     return text;
 }
 
+std::wstring utf8StdinText() {
+    std::string input(
+        (std::istreambuf_iterator<char>(std::cin)),
+        std::istreambuf_iterator<char>());
+    if (input.empty() || input.size() > static_cast<std::size_t>(INT_MAX)) return {};
+    const int required = MultiByteToWideChar(
+        CP_UTF8, MB_ERR_INVALID_CHARS, input.data(), static_cast<int>(input.size()),
+        nullptr, 0);
+    if (required <= 0) return {};
+    std::wstring output(static_cast<std::size_t>(required), L'\0');
+    if (MultiByteToWideChar(
+            CP_UTF8, MB_ERR_INVALID_CHARS, input.data(), static_cast<int>(input.size()),
+            output.data(), required) != required) {
+        return {};
+    }
+    return output;
+}
+
 } // namespace
 
-int wmain() {
-    const std::wstring text = commandLineText();
+int wmain(int argument_count, wchar_t* arguments[]) {
+    const bool read_utf8_stdin = argument_count == 2 &&
+        std::wstring_view(arguments[1]) == L"--stdin-utf8";
+    const std::wstring text = read_utf8_stdin ? utf8StdinText() : commandLineText();
     if (text.empty()) {
         std::wcerr << L"Usage: sensevoice-inject.exe <text>\n";
         return 2;
