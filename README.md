@@ -174,10 +174,5 @@ Core、GUI、Widgets 和 `qwindows` 平台插件，不包含 QML、WebEngine 或
 开机启动，不需要管理员权限。安装器支持 `/quiet` 和 `/silent` 参数，用于自动化部署时
 隐藏完成提示。
 
-安装包同时包含 `sensevoice-inject.exe`，用于把最终文本通过 OpenLess TSF 或 UI
-Automation 注入当前获得焦点的 Windows 文本框。Codex 侧的 `sensevoice-codex-voice`
-插件提供同名的 `inject_text` MCP 工具，已加入当前用户的 personal marketplace；保持
-Codex composer 聚焦后即可让插件把最终文本送入光标位置，不使用剪贴板粘贴。
-
 Git 初始提交不包含 `build`、`dist`、`out`、截图和模型发布目录；第三方源代码保留在
 `third_party` 以保证本地构建可复现，临时的 llama.cpp 压缩包和不完整快照会被忽略。

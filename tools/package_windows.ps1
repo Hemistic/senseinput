@@ -15,7 +15,7 @@ $archivePath = Join-Path $root "out\SenseVoice-$Version-windows-x64.zip"
 $cmake = 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 
 if (-not $SkipBuild) {
-    & $cmake --build $buildDirectory --config $Configuration --target sensevoice-ui sensevoice-ui-legacy sensevoice-stream sensevoice-inject --parallel 8
+    & $cmake --build $buildDirectory --config $Configuration --target sensevoice-ui sensevoice-ui-legacy sensevoice-stream --parallel 8
     if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
 }
 
@@ -35,7 +35,6 @@ Get-ChildItem -LiteralPath $distDirectory -Force |
 Copy-Item -LiteralPath (Join-Path $binaryDirectory 'sensevoice-ui.exe') -Destination $packageDirectory -Force
 Copy-Item -LiteralPath (Join-Path $binaryDirectory 'sensevoice-ui-legacy.exe') -Destination $packageDirectory -Force
 Copy-Item -LiteralPath (Join-Path $binaryDirectory 'sensevoice-stream.exe') -Destination $packageDirectory -Force
-Copy-Item -LiteralPath (Join-Path $binaryDirectory 'sensevoice-inject.exe') -Destination $packageDirectory -Force
 Copy-Item -LiteralPath (Join-Path $root 'packaging\windows\install.ps1') -Destination $packageDirectory -Force
 Copy-Item -LiteralPath (Join-Path $root 'packaging\windows\install.cmd') -Destination $packageDirectory -Force
 Copy-Item -LiteralPath (Join-Path $root 'packaging\windows\uninstall.ps1') -Destination $packageDirectory -Force
