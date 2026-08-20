@@ -156,14 +156,6 @@ if(WIN32)
         mfuuid
     )
 
-    add_executable(sensevoice-setup-stub WIN32
-        packaging/windows/setup_stub.cpp
-        resources/sensevoice.rc
-    )
-    set_property(TARGET sensevoice-setup-stub PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-    target_compile_definitions(sensevoice-setup-stub PRIVATE NOMINMAX UNICODE _UNICODE)
-    target_compile_options(sensevoice-setup-stub PRIVATE /utf-8 /W4 /permissive-)
 endif()
 
 enable_testing()

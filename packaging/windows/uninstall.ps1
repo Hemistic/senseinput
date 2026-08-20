@@ -1,6 +1,7 @@
 param(
     [string]$InstallDirectory = $PSScriptRoot,
-    [switch]$Quiet
+    [switch]$Quiet,
+    [switch]$KeepFiles
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,12 +12,16 @@ $uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Sense
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueName = 'SenseVoice'
 
-# The uninstaller is launched from Apps & Features while the tray process may
-# still be running. Stop only this application's processes so files and the
-# startup entry can be removed deterministically.
-Get-Process -Name 'sensevoice-ui' -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -eq (Join-Path ([System.IO.Path]::GetFullPath($InstallDirectory)) 'sensevoice-ui.exe') } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+# The standard Inno uninstaller calls this hidden helper before deleting files.
+# Match executable paths so a portable or different-version instance is not
+# terminated accidentally.
+$resolvedInstallDirectory = [System.IO.Path]::GetFullPath($InstallDirectory)
+$executableNames = @('sensevoice-ui', 'sensevoice-ui-legacy', 'sensevoice-stream')
+foreach ($executableName in $executableNames) {
+    Get-Process -Name $executableName -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq (Join-Path $resolvedInstallDirectory ($executableName + '.exe')) } |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+}
 
 Remove-Item -LiteralPath $startupShortcut -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $startMenuShortcut -Force -ErrorAction SilentlyContinue
@@ -24,8 +29,7 @@ Remove-Item -LiteralPath $startMenuDirectory -Force -Recurse -ErrorAction Silent
 Remove-ItemProperty -Path $runKey -Name $runValueName -Force -ErrorAction SilentlyContinue
 Remove-Item -Path $uninstallKey -Force -Recurse -ErrorAction SilentlyContinue
 
-$resolvedInstallDirectory = [System.IO.Path]::GetFullPath($InstallDirectory)
-if ((Split-Path -Leaf $resolvedInstallDirectory) -eq 'SenseVoice' -and
+if (-not $KeepFiles -and (Split-Path -Leaf $resolvedInstallDirectory) -eq 'SenseVoice' -and
     (Split-Path -Parent $resolvedInstallDirectory) -eq $env:LOCALAPPDATA) {
     Remove-Item -LiteralPath $resolvedInstallDirectory -Force -Recurse -ErrorAction SilentlyContinue
 }

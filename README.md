@@ -30,7 +30,7 @@ SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合
 - 创建开始菜单快捷方式；
 - 默认通过当前用户的 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 注册开机启动；
 - 不需要管理员权限；
-- 支持从“应用和功能”或安装目录中的 `uninstall.ps1` 卸载，卸载时会停止程序并清理自启动注册和快捷方式。
+- 支持从“应用和功能”或开始菜单中的 `unins000.exe` 卸载，卸载时会停止程序并清理自启动注册和快捷方式。Portable ZIP 仍提供 `uninstall.ps1`。
 
 ### Portable ZIP
 
@@ -121,8 +121,8 @@ The default build uses the CPU backend. OpenMP is disabled to avoid an extra run
 ## Packaging
 
 ~~~powershell
-.\\tools\\package_windows.ps1 -Version 0.1.0
-.\\tools\\create_installer.ps1 -Version 0.1.0
+.\tools\package_windows.ps1 -Version 0.1.0
+.\tools\create_installer.ps1 -Version 0.1.0
 ~~~
 
 Outputs:
@@ -132,7 +132,9 @@ out\\SenseVoice-0.1.0-windows-x64.zip
 out\\SenseVoice-0.1.0-Setup.exe
 ~~~
 
-The installer is a project-owned self-extracting executable. It does not depend on IExpress and does not require administrator rights.
+The installer is a standard Inno Setup wizard with welcome, destination, Start Menu, startup-task, progress, and finish pages. It installs per-user without administrator rights, registers an Apps & Features uninstall entry, and creates a native `unins000.exe` uninstaller. The portable ZIP keeps the PowerShell install/uninstall scripts separately.
+
+To build the standard installer, install Inno Setup 6/7 so `ISCC.exe` is available, set `INNO_SETUP_HOME`, or pass `-CompilerPath` to `create_installer.ps1`.
 
 ## Performance Snapshot
 
@@ -153,7 +155,7 @@ These numbers are hardware-dependent engineering references, not benchmark claim
 ~~~text
 src/                         C++20 recognition, VAD, audio and Qt UI
 resources/                   Qt resources, ICO and Windows version resources
-packaging/windows/            User-level installer and uninstall scripts
+packaging/windows/            Inno Setup definition and portable scripts
 tools/                       Packaging, icon generation and geometry checks
 third_party/                 llama.cpp, FunASR runtime, cppjieba and OpenLess sources
 tests/                       Recognition, text processing and Windows injection tests
@@ -169,7 +171,7 @@ The default model is SenseVoiceSmall Q8 GGUF from FunAudioLLM. The runtime is bu
 - [x] FSMN-VAD endpointing and configurable thresholds
 - [x] Hotword management and local text cleanup
 - [x] Windows TSF/UI Automation injection
-- [x] Qt floating UI and self-extracting installer
+- [x] Qt floating UI and standard Inno Setup installer
 - [ ] macOS audio capture and text insertion
 - [ ] Optional FP16 performance profile for supported hardware
 
