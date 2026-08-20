@@ -28,9 +28,9 @@ SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合
 
 - 安装到当前用户的 %LOCALAPPDATA%\\SenseVoice；
 - 创建开始菜单快捷方式；
-- 默认注册当前用户开机启动；
+- 默认通过当前用户的 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 注册开机启动；
 - 不需要管理员权限；
-- 支持从“应用和功能”或安装目录中的 uninstall.ps1 卸载。
+- 支持从“应用和功能”或安装目录中的 `uninstall.ps1` 卸载，卸载时会停止程序并清理自启动注册和快捷方式。
 
 ### Portable ZIP
 
@@ -42,7 +42,7 @@ SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合
 
 模型加载完成后，在任意 Windows 文本输入框中按住默认快捷键 Ctrl+Alt+Space，说话后松开即可注入到录音开始前的光标位置。程序不会自动按 Enter，避免误发送消息。
 
-默认快捷键可以在托盘菜单的“设置”中改为 Ctrl+Win、Ctrl+Shift+Space、F8 或自定义组合键。
+默认快捷键可以在托盘菜单的“设置”中改为 Ctrl+Win、Ctrl+Shift+Space、F8 或自定义组合键；同一页面也可以关闭“开机自动启动”。
 
 ## How It Works
 

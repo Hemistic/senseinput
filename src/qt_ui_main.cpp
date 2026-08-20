@@ -16,13 +16,17 @@
 #include <QComboBox>
 #include <QContextMenuEvent>
 #include <QDialog>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QGuiApplication>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QImage>
 #include <QIcon>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QKeySequence>
 #include <QKeySequenceEdit>
@@ -33,7 +37,6 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
-#include <QPropertyAnimation>
 #include <QPushButton>
 #include <QRadialGradient>
 #include <QRegion>
@@ -51,7 +54,6 @@
 #include <QTextOption>
 #include <QTimer>
 #include <QToolButton>
-#include <QVariantAnimation>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -163,6 +165,53 @@ enum class TextMode {
 
 constexpr auto default_hotkey = "Ctrl+Alt+Space";
 constexpr auto control_windows_hotkey = "Ctrl+Win";
+
+#ifdef _WIN32
+constexpr auto windows_startup_run_key =
+    "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+constexpr auto windows_startup_value_name = "SenseVoice";
+
+QString windowsStartupCommand() {
+    const QString executable = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    return QStringLiteral("\"%1\"").arg(executable);
+}
+
+QString windowsLegacyStartupShortcut() {
+    const QString app_data = QString::fromLocal8Bit(qgetenv("APPDATA"));
+    return QDir::toNativeSeparators(QDir(app_data).filePath(
+        QStringLiteral("Microsoft/Windows/Start Menu/Programs/Startup/SenseVoice.lnk")));
+}
+
+bool windowsStartupEnabled() {
+    QSettings startup_settings(
+        QString::fromLatin1(windows_startup_run_key), QSettings::NativeFormat);
+    const QString configured = startup_settings.value(
+        QString::fromLatin1(windows_startup_value_name)).toString().trimmed();
+    if (!configured.isEmpty()) {
+        const QString executable = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+        if (configured.contains(executable, Qt::CaseInsensitive)) return true;
+    }
+    // Older installers used a Startup-folder shortcut. Treat it as enabled so
+    // the first settings save can migrate it to the registry Run entry.
+    return QFile::exists(windowsLegacyStartupShortcut());
+}
+
+bool setWindowsStartupEnabled(bool enabled) {
+    QSettings startup_settings(
+        QString::fromLatin1(windows_startup_run_key), QSettings::NativeFormat);
+    const QString value_name = QString::fromLatin1(windows_startup_value_name);
+    if (enabled) {
+        startup_settings.setValue(value_name, windowsStartupCommand());
+    } else {
+        startup_settings.remove(value_name);
+    }
+    // Remove the legacy shortcut in both modes. Keeping two startup entries
+    // would launch duplicate processes after an upgrade.
+    QFile::remove(windowsLegacyStartupShortcut());
+    startup_settings.sync();
+    return startup_settings.status() == QSettings::NoError;
+}
+#endif
 
 QString canonicalShortcut(const QString& value) {
     QString compact = value;
@@ -280,7 +329,9 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHints(QPainter::Antialiasing |
+                               QPainter::TextAntialiasing |
+                               QPainter::SmoothPixmapTransform);
         const float normalized_level = active_
             ? std::clamp((input_db_ + 60.0F) / 48.0F, 0.0F, 1.0F)
             : 0.0F;
@@ -583,7 +634,9 @@ protected:
         }
 
         QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHints(QPainter::Antialiasing |
+                               QPainter::TextAntialiasing |
+                               QPainter::SmoothPixmapTransform);
         const QPointF center(width() / 2.0, height() / 2.0);
         QRadialGradient glow(center, 4.0);
         glow.setColorAt(0.0, QColor(color.red(), color.green(), color.blue(), 155));
@@ -722,7 +775,9 @@ protected:
     void paintEvent(QPaintEvent* event) override {
         if (style_ == BubbleStyle::Ring) {
             QPainter painter(this);
-            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setRenderHints(QPainter::Antialiasing |
+                                   QPainter::TextAntialiasing |
+                                   QPainter::SmoothPixmapTransform);
             const QRectF control_rect = QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0);
             painter.setPen(QPen(QColor(235, 236, 240, 78), 1.0));
             painter.setBrush(QColor(78, 80, 86, 72));
@@ -786,6 +841,7 @@ public:
         setAttribute(Qt::WA_TransparentForMouseEvents);
         QFont text_font = font();
         text_font.setPointSize(10);
+        text_font.setStyleStrategy(QFont::PreferAntialias);
         setFont(text_font);
         base_font_ = text_font;
         document_.setDocumentMargin(0);
@@ -881,7 +937,9 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHints(QPainter::Antialiasing |
+                               QPainter::TextAntialiasing |
+                               QPainter::SmoothPixmapTransform);
         const Metrics metrics = metricsFor(style_);
         const QRectF bubble_rect = QRectF(rect()).adjusted(1.0, 1.0, -1.0, -1.0);
         qreal radius = 10.0;
@@ -959,6 +1017,7 @@ public:
     InputSettingsDialog(const VadSettings& values,
                         const QString& shortcut,
                         TextMode mode,
+                        bool startup_enabled,
                         const std::vector<HotwordEntry>& hotwords,
                         QWidget* parent = nullptr)
         : QDialog(parent) {
@@ -1002,7 +1061,7 @@ public:
         root->addWidget(heading);
 
         auto* tabs = new QTabWidget;
-        tabs->addTab(createInputPage(shortcut, mode), QStringLiteral("输入"));
+        tabs->addTab(createInputPage(shortcut, mode, startup_enabled), QStringLiteral("输入"));
         tabs->addTab(createHotwordPage(hotwords), QStringLiteral("热词"));
         tabs->addTab(createVadPage(values), QStringLiteral("VAD"));
         root->addWidget(tabs);
@@ -1057,6 +1116,10 @@ public:
         return mode_group_->checkedId() == 0 ? TextMode::Raw : TextMode::Clean;
     }
 
+    bool startupEnabled() const {
+        return startup_checkbox_ != nullptr && startup_checkbox_->isChecked();
+    }
+
     std::vector<HotwordEntry> hotwords() const {
         std::vector<HotwordEntry> entries;
         entries.reserve(static_cast<std::size_t>(hotword_table_->rowCount()));
@@ -1089,7 +1152,9 @@ public:
 private:
     enum class ValueFormat { Milliseconds, Threshold, Dbfs, Db };
 
-    QWidget* createInputPage(const QString& current_shortcut, TextMode mode) {
+    QWidget* createInputPage(const QString& current_shortcut,
+                             TextMode mode,
+                             bool startup_enabled) {
         auto* page = new QWidget;
         auto* layout = new QVBoxLayout(page);
         layout->setContentsMargins(18, 18, 18, 16);
@@ -1164,6 +1229,12 @@ private:
                 });
         connect(shortcut_edit_, &QKeySequenceEdit::keySequenceChanged, this,
                 [this](const QKeySequence&) { shortcut_error_->clear(); });
+
+        startup_checkbox_ = new QCheckBox(QStringLiteral("开机自动启动"));
+        startup_checkbox_->setChecked(startup_enabled);
+        startup_checkbox_->setToolTip(QStringLiteral(
+            "使用当前用户的 Windows 启动项注册，不需要管理员权限。"));
+        layout->addWidget(startup_checkbox_);
         return page;
     }
 
@@ -1332,6 +1403,7 @@ private:
     QComboBox* shortcut_preset_ = nullptr;
     QKeySequenceEdit* shortcut_edit_ = nullptr;
     QLabel* shortcut_error_ = nullptr;
+    QCheckBox* startup_checkbox_ = nullptr;
     QButtonGroup* mode_group_ = nullptr;
     QPushButton* raw_mode_button_ = nullptr;
     QPushButton* clean_mode_button_ = nullptr;
@@ -1352,22 +1424,6 @@ public:
                        Qt::WindowDoesNotAcceptFocus);
         setAttribute(Qt::WA_TranslucentBackground);
         setAttribute(Qt::WA_ShowWithoutActivating);
-        size_animation_.setDuration(140);
-        size_animation_.setEasingCurve(QEasingCurve::OutCubic);
-        connect(&size_animation_, &QVariantAnimation::valueChanged, this,
-                [this](const QVariant& value) {
-                    if (!isVisible()) return;
-                    const QSize animated_size = value.toSize();
-                    if (!animated_size.isValid()) return;
-                    const int anchor_left = geometry_anchor_valid_
-                        ? geometry_anchor_left_ : x();
-                    const int anchor_bottom = geometry_anchor_valid_
-                        ? geometry_anchor_bottom_ : y() + height();
-                    setGeometry(anchor_left,
-                                anchor_bottom - animated_size.height(),
-                                animated_size.width(),
-                                animated_size.height());
-                });
         if (preview_mode_) {
             setWindowFlag(Qt::WindowDoesNotAcceptFocus, false);
             setAttribute(Qt::WA_ShowWithoutActivating, false);
@@ -1446,6 +1502,14 @@ public:
         setBubbleStatus(text);
     }
 
+    void setGeometryLogPath(const QString& path) {
+        if (path.trimmed().isEmpty()) return;
+        geometry_log_.setFileName(path);
+        if (!geometry_log_.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            geometry_log_.setFileName({});
+        }
+    }
+
     void setPreviewSignal() {
         if (!preview_mode_) return;
         meter_timer_.stop();
@@ -1493,7 +1557,7 @@ protected:
 
     void mouseReleaseEvent(QMouseEvent* event) override {
         if (dragging_) {
-            geometry_anchor_left_ = x();
+            geometry_anchor_center_ = x() + width() / 2;
             geometry_anchor_bottom_ = y() + height();
             geometry_anchor_valid_ = true;
         }
@@ -1567,8 +1631,8 @@ private:
         static const std::array<QString, 6> samples = {
             QStringLiteral("短句"),
             QStringLiteral("文字逐步变长"),
-            QStringLiteral("文字逐步变长时窗口左边缘应该保持不动"),
-            QStringLiteral("文字逐步变长时窗口左边缘应该保持不动，底边也应该保持不动。"),
+            QStringLiteral("文字逐步变长时窗口视觉中心应该保持不动"),
+            QStringLiteral("文字逐步变长时窗口视觉中心应该保持不动，底边也应该保持不动。"),
             QStringLiteral("这是一个更长的预览句子，用来验证窗口宽高动画不会导致水平抖动。"),
             QStringLiteral("这是一个更长的预览句子，用来验证窗口宽高动画不会导致水平抖动，内容变成多行后仍然保持稳定。"),
         };
@@ -1677,7 +1741,6 @@ private:
 
     void hidePopup() {
         if (state_ == State::Listening || state_ == State::Stopping) return;
-        size_animation_.stop();
         hide();
         geometry_anchor_valid_ = false;
     }
@@ -1707,6 +1770,9 @@ private:
         if (!hasUsableShortcutKey(hotkey_shortcut_)) {
             hotkey_shortcut_ = QString::fromLatin1(default_hotkey);
         }
+#ifdef _WIN32
+        startup_enabled_ = windowsStartupEnabled();
+#endif
     }
 
     void saveSettings() {
@@ -1726,7 +1792,8 @@ private:
             return;
         }
         InputSettingsDialog dialog(
-            vad_settings_, hotkey_shortcut_, text_mode_, text_processor_.hotwords(), this);
+            vad_settings_, hotkey_shortcut_, text_mode_, startup_enabled_,
+            text_processor_.hotwords(), this);
         if (dialog.exec() == QDialog::Accepted) {
             vad_settings_ = dialog.values();
             text_mode_ = dialog.mode();
@@ -1735,6 +1802,14 @@ private:
             const QString selected_shortcut = dialog.shortcut();
 #ifdef _WIN32
             applyHotkey(selected_shortcut);
+            const bool requested_startup = dialog.startupEnabled();
+            if (!setWindowsStartupEnabled(requested_startup)) {
+                QMessageBox::warning(
+                    this, QStringLiteral("开机启动设置失败"),
+                    QStringLiteral("无法写入当前用户的 Windows 启动项。"));
+            } else {
+                startup_enabled_ = requested_startup;
+            }
 #else
             hotkey_shortcut_ = selected_shortcut;
 #endif
@@ -1783,31 +1858,16 @@ private:
     }
 
     void updateGlassMask() {
-        if (transcript_ == nullptr || recording_control_ == nullptr) return;
-        if (layout() != nullptr) layout()->activate();
-        QRegion glass_region = roundedRegion(
-            transcript_->geometry(), transcript_->cornerRadius());
-        glass_region += roundedRegion(
-            recording_control_->geometry(), recording_control_->height() / 2);
-        setMask(glass_region);
+        // Do not use QWidget::setMask here. Windows regions are integer-pixel
+        // clips and produce the jagged gray fringe visible around translucent
+        // text bubbles. Qt's per-pixel alpha already gives us smooth corners.
     }
 
     void applyGlassBackdrop() {
-        const HWND window_handle = reinterpret_cast<HWND>(winId());
-        // BlurBehind respects the window region set by updateGlassMask().
-        // Unlike a system backdrop, it does not paint the transparent gap
-        // between the transcript and the control capsule.
-        if (HMODULE dwmapi = LoadLibraryW(L"dwmapi.dll")) {
-            const auto enable_blur = reinterpret_cast<DwmEnableBlurBehindWindowFn>(
-                GetProcAddress(dwmapi, "DwmEnableBlurBehindWindow"));
-            if (enable_blur != nullptr) {
-                constexpr DWORD blur_enable = 0x1;
-                const DwmBlurBehind blur{blur_enable, TRUE, nullptr, FALSE};
-                enable_blur(window_handle, &blur);
-            }
-            FreeLibrary(dwmapi);
-        }
-        updateGlassMask();
+        // Keep the top-level layered window transparent between its two child
+        // bubbles. System BlurBehind applies to the entire rectangular window
+        // and makes that transparent gap look opaque on some Windows builds.
+        clearMask();
     }
 
     struct HotkeyBinding {
@@ -2321,21 +2381,24 @@ private:
 
     void beginStableSessionGeometry() {
         if (!geometry_anchor_valid_) {
-            geometry_anchor_left_ = x();
+            geometry_anchor_center_ = x() + width() / 2;
             geometry_anchor_bottom_ = y() + height();
             geometry_anchor_valid_ = true;
         }
     }
 
     void updateWindowGeometry() {
+        if (layout() != nullptr) layout()->activate();
         const QSize bubble_size = transcript_->size();
         const bool preserve_anchor = isVisible();
         if (preserve_anchor && !geometry_anchor_valid_) {
-            geometry_anchor_left_ = x();
+            geometry_anchor_center_ = x() + width() / 2;
             geometry_anchor_bottom_ = y() + height();
             geometry_anchor_valid_ = true;
         }
-        const int horizontal_anchor = geometry_anchor_valid_ ? geometry_anchor_left_ : x();
+        const int horizontal_center_anchor = geometry_anchor_valid_
+            ? geometry_anchor_center_
+            : x() + width() / 2;
         const int bottom_anchor = geometry_anchor_valid_
             ? geometry_anchor_bottom_
             : y() + height();
@@ -2347,7 +2410,7 @@ private:
         int new_x = x();
         int new_y = y();
         if (preserve_anchor) {
-            new_x = horizontal_anchor;
+            new_x = horizontal_center_anchor - new_width / 2;
             new_y = bottom_anchor - new_height;
             if (QScreen* current_screen = screen()) {
                 const QRect area = current_screen->availableGeometry();
@@ -2358,20 +2421,49 @@ private:
         }
 
         const QRect target_geometry(new_x, new_y, new_width, new_height);
-        if (!preserve_anchor) {
-            setGeometry(target_geometry);
+        if (geometry() == target_geometry) {
+            writeGeometrySnapshot();
             return;
         }
-        if (geometry() == target_geometry) return;
-        if (x() != new_x) move(new_x, y());
-        const QSize target_size(new_width, new_height);
-        if (size_animation_.state() == QAbstractAnimation::Running) {
-            size_animation_.setEndValue(target_size);
-            return;
-        }
-        size_animation_.setStartValue(size());
-        size_animation_.setEndValue(target_size);
-        size_animation_.start();
+        // Partial results can arrive several times per second. Resizing through
+        // a second animation lets stale targets race with newer text and causes
+        // visible horizontal oscillation. Apply one anchored geometry atomically:
+        // the center and bottom edge stay fixed while the content grows.
+        setGeometry(target_geometry);
+        if (layout() != nullptr) layout()->activate();
+        writeGeometrySnapshot();
+    }
+
+    void writeGeometrySnapshot() {
+        if (!geometry_log_.isOpen() || transcript_ == nullptr || recording_control_ == nullptr) return;
+        if (layout() != nullptr) layout()->activate();
+        const QRect bubble = transcript_->geometry();
+        const QRect control = recording_control_->geometry();
+        const double window_center = x() + width() / 2.0;
+        const double bubble_center = x() + bubble.left() + bubble.width() / 2.0;
+        const double control_center = x() + control.left() + control.width() / 2.0;
+        QJsonObject snapshot;
+        snapshot.insert(QStringLiteral("window_left"), x());
+        snapshot.insert(QStringLiteral("window_top"), y());
+        snapshot.insert(QStringLiteral("window_width"), width());
+        snapshot.insert(QStringLiteral("window_height"), height());
+        snapshot.insert(QStringLiteral("window_center_x"), window_center);
+        snapshot.insert(QStringLiteral("window_bottom"), y() + height());
+        snapshot.insert(QStringLiteral("bubble_left"), bubble.left());
+        snapshot.insert(QStringLiteral("bubble_top"), bubble.top());
+        snapshot.insert(QStringLiteral("bubble_width"), bubble.width());
+        snapshot.insert(QStringLiteral("bubble_height"), bubble.height());
+        snapshot.insert(QStringLiteral("bubble_center_x"), bubble_center);
+        snapshot.insert(QStringLiteral("control_left"), control.left());
+        snapshot.insert(QStringLiteral("control_top"), control.top());
+        snapshot.insert(QStringLiteral("control_width"), control.width());
+        snapshot.insert(QStringLiteral("control_height"), control.height());
+        snapshot.insert(QStringLiteral("control_center_x"), control_center);
+        snapshot.insert(QStringLiteral("center_delta"), bubble_center - control_center);
+        snapshot.insert(QStringLiteral("window_bubble_delta"), bubble_center - window_center);
+        geometry_log_.write(QJsonDocument(snapshot).toJson(QJsonDocument::Compact));
+        geometry_log_.write("\n");
+        geometry_log_.flush();
     }
 
     void updateMeter() {
@@ -2403,6 +2495,9 @@ private:
     QSettings settings_;
     VadSettings vad_settings_;
     TextMode text_mode_ = TextMode::Clean;
+#ifdef _WIN32
+    bool startup_enabled_ = false;
+#endif
     QString hotkey_shortcut_ = QString::fromLatin1(default_hotkey);
     BubbleStyle bubble_style_ = BubbleStyle::Ring;
     bool preview_mode_ = false;
@@ -2413,7 +2508,6 @@ private:
     QTimer meter_timer_;
     QTimer status_reset_timer_;
     QElapsedTimer session_elapsed_;
-    QVariantAnimation size_animation_;
 #ifdef _WIN32
     static constexpr int hotkey_primary_id = 0x5340;
     static constexpr int hotkey_left_id = 0x5341;
@@ -2447,11 +2541,12 @@ private:
     QString partial_text_;
     QPoint drag_offset_;
     bool dragging_ = false;
-    int geometry_anchor_left_ = 0;
+    int geometry_anchor_center_ = 0;
     int geometry_anchor_bottom_ = 0;
     bool geometry_anchor_valid_ = false;
     bool stop_should_commit_ = false;
     bool inject_on_complete_ = false;
+    QFile geometry_log_;
 };
 
 } // namespace
@@ -2482,6 +2577,7 @@ int main(int argc, char* argv[]) {
     }
     BubbleStyle preview_style = BubbleStyle::Ring;
     QString preview_image_path;
+    QString preview_geometry_log_path;
     QString preview_text = QStringLiteral(
         "这一句用于比较浮窗方案的文字布局。说长一点时，气泡会自动扩展，不滚动，也不会裁切内容。\n"
         "第二段会保留在同一个浮窗中，方便观察长内容的宽高变化。\n"
@@ -2491,6 +2587,8 @@ int main(int argc, char* argv[]) {
             preview_style = bubbleStyleFromName(arguments[++index]);
         } else if (arguments[index] == QStringLiteral("--preview-image") && index + 1 < arguments.size()) {
             preview_image_path = arguments[++index];
+        } else if (arguments[index] == QStringLiteral("--preview-geometry-log") && index + 1 < arguments.size()) {
+            preview_geometry_log_path = arguments[++index];
         } else if (arguments[index] == QStringLiteral("--preview-text") && index + 1 < arguments.size()) {
             preview_text = arguments[++index];
         }
@@ -2553,6 +2651,7 @@ int main(int argc, char* argv[]) {
             if (preview_active) single_window->setPreviewSignal();
             single_window->show();
             single_window->raise();
+            single_window->setGeometryLogPath(preview_geometry_log_path);
             if (preview_geometry_test) single_window->startPreviewGeometryTest();
         } else {
             single_window->hideUntilInput();
