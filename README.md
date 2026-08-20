@@ -1,4 +1,4 @@
-# SenseVoice Desk
+# SenseVoice 语音输入（SenseVoice Desk）
 
 ![Windows](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)
@@ -7,6 +7,8 @@
 
 轻量、离线、原生 Windows 语音输入工具。
 
+SenseVoice 是把麦克风语音转换为文字并注入当前光标位置的桌面工具，不是传统的语言输入法。按住快捷键说话，松开后即可将本次识别结果写入正在使用的应用。
+
 SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合 FSMN-VAD 实现实时分句、临时结果更新和最终结果提交。麦克风音频和识别结果都留在本机，不依赖云端 API。
 
 ## 项目特点
@@ -14,7 +16,7 @@ SenseVoice Desk 使用 SenseVoiceSmall Q8 GGUF 作为底层识别模型，配合
 - **离线优先**：默认模型和所有处理都在本机运行。
 - **轻量模型**：SenseVoiceSmall Q8 约 242 MiB，适合桌面常驻。
 - **实时体验**：VAD 负责断句，识别线程只处理最新快照，避免结果堆积。
-- **直接输入**：通过 Windows TSF 和 UI Automation 写入当前光标，不依赖剪贴板粘贴。
+- **语音结果注入**：通过 Windows TSF 和 UI Automation 将识别文字写入当前光标，不依赖剪贴板粘贴。
 - **可调参数**：快捷键、VAD 门限、句尾静音、最低响度、SNR、热词和文本整理模式均可配置。
 - **低打扰浮窗**：Qt 6 无边框界面显示文字、响度、VAD 状态、声纹和计时。
 - **内存保护**：单句长度和工作集都有上限，长内容在最近的 VAD 边界自动分句。
