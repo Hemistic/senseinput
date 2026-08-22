@@ -181,6 +181,19 @@ tests/                       识别、文本处理和 Windows 注入测试
 
 欢迎提交 Issue 和 Pull Request。报告识别或注入问题时，请附上 Windows 版本、CPU 架构、模型量化类型、音频特征和相关日志。请勿上传私人录音或凭据。
 
+## 可选的 OpenRouter TTS
+
+仓库包含 tools/openrouter_tts.py，可调用 OpenRouter 的 OpenAI 兼容语音接口生成播客或语音片段。API key 只从环境变量 OPENROUTER_API_KEY 读取：
+
+~~~powershell
+$env:OPENROUTER_API_KEY = 'sk-or-v1-...'
+py -3 tools/openrouter_tts.py `
+  --text-file examples/podcast_dialogue.zh.txt `
+  --output out/sensevoice-desk-podcast-dialogue.mp3
+~~~
+
+默认模型是 fish-audio/s2.1-pro-free:free，输出 MP3，使用该提供方当前支持的 alloy 声音。直连失败时可传入 --proxy http://127.0.0.1:17890，或设置 OPENROUTER_PROXY。不要把 API key 或本地 .env 文件提交到仓库。
+
 ## 许可证
 
 本仓库目前没有声明顶层许可证。发布衍生二进制文件前，请分别确认本项目、捆绑的第三方源码和 SenseVoice 模型的许可证要求。
