@@ -28,6 +28,7 @@ def request_audio(
     voice: str | None,
     response_format: str,
     proxy: str | None,
+    instructions: str | None,
 ) -> tuple[bytes, str | None]:
     payload = {
         "model": model,
@@ -36,6 +37,8 @@ def request_audio(
     }
     if voice:
         payload["voice"] = voice
+    if instructions:
+        payload["instructions"] = instructions
     request = Request(
         ENDPOINT,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -72,6 +75,7 @@ def generate(args: argparse.Namespace) -> int:
             voice=args.voice,
             response_format=args.response_format,
             proxy=None,
+            instructions=args.instructions,
         )
         route = "direct"
     except (HTTPError, URLError, TimeoutError, OSError) as direct_error:
@@ -87,6 +91,7 @@ def generate(args: argparse.Namespace) -> int:
                 voice=args.voice,
                 response_format=args.response_format,
                 proxy=fallback_proxy,
+                instructions=args.instructions,
             )
             route = f"proxy {fallback_proxy}"
         except (HTTPError, URLError, TimeoutError, OSError) as proxy_error:
@@ -113,6 +118,7 @@ def main() -> int:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--voice", help="Optional provider voice; omit it to use the model's default voice")
     parser.add_argument("--response-format", choices=("mp3", "pcm"), default="mp3")
+    parser.add_argument("--instructions", help="Optional delivery/style instruction for the TTS model")
     parser.add_argument("--proxy", help="HTTP proxy, defaulting to OPENROUTER_PROXY or 127.0.0.1:17890 on fallback")
     return generate(parser.parse_args())
 

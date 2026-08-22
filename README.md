@@ -194,6 +194,8 @@ py -3 tools/openrouter_tts.py `
 
 默认模型是 fish-audio/s2.1-pro-free:free，输出 MP3。默认不指定 voice，让 Fish Audio 选择模型默认音色；如果需要显式指定提供方支持的声音，可以额外传入 --voice。直连失败时可传入 --proxy http://127.0.0.1:17890，或设置 OPENROUTER_PROXY。不要把 API key 或本地 .env 文件提交到仓库。
 
+要生成更像播客主持人的表达，可以增加 --instructions，说明开场热情、重点强调、提问上扬、回答沉稳和适中的语速。
+
 ## 许可证
 
 本仓库目前没有声明顶层许可证。发布衍生二进制文件前，请分别确认本项目、捆绑的第三方源码和 SenseVoice 模型的许可证要求。
