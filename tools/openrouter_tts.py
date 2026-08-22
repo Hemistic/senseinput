@@ -25,16 +25,17 @@ def request_audio(
     api_key: str,
     text: str,
     model: str,
-    voice: str,
+    voice: str | None,
     response_format: str,
     proxy: str | None,
 ) -> tuple[bytes, str | None]:
     payload = {
         "model": model,
         "input": text,
-        "voice": voice,
         "response_format": response_format,
     }
+    if voice:
+        payload["voice"] = voice
     request = Request(
         ENDPOINT,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -110,7 +111,7 @@ def main() -> int:
     source.add_argument("--text-file", help="UTF-8 text file to synthesize")
     parser.add_argument("--output", required=True, help="Output audio path")
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--voice", default="alloy")
+    parser.add_argument("--voice", help="Optional provider voice; omit it to use the model's default voice")
     parser.add_argument("--response-format", choices=("mp3", "pcm"), default="mp3")
     parser.add_argument("--proxy", help="HTTP proxy, defaulting to OPENROUTER_PROXY or 127.0.0.1:17890 on fallback")
     return generate(parser.parse_args())

@@ -192,7 +192,7 @@ py -3 tools/openrouter_tts.py `
   --output out/sensevoice-desk-podcast-dialogue.mp3
 ~~~
 
-默认模型是 fish-audio/s2.1-pro-free:free，输出 MP3，使用该提供方当前支持的 alloy 声音。直连失败时可传入 --proxy http://127.0.0.1:17890，或设置 OPENROUTER_PROXY。不要把 API key 或本地 .env 文件提交到仓库。
+默认模型是 fish-audio/s2.1-pro-free:free，输出 MP3。默认不指定 voice，让 Fish Audio 选择模型默认音色；如果需要显式指定提供方支持的声音，可以额外传入 --voice。直连失败时可传入 --proxy http://127.0.0.1:17890，或设置 OPENROUTER_PROXY。不要把 API key 或本地 .env 文件提交到仓库。
 
 ## 许可证
 
